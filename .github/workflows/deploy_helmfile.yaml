@@ -18,6 +18,16 @@ on:
         required: false
         default: '.'
         type: string
+      helmfileCommand:
+        description: 'Command to call helmfile deploy with (apply or sync, usually)'
+        required: false
+        default: 'apply'
+        type: string
+      helmfileParameters:
+        description: 'Parameters to pass to helmfile deploy'
+        required: false
+        default: '--suppress-diff'
+        type: string
       kubeConfigSecret:
         description: 'Path to kubeconfig in vault'
         required: true
@@ -109,7 +119,7 @@ jobs:
           echo $KUBECONFIG_BASE64 | base64 --decode > ~/.kube/config
           chmod 600 ~/.kube/config
           cd ${{ inputs.helmfileDir }}
-          helmfile -e ${{ inputs.globalEnv }} -l app=${{ inputs.appName }} apply --suppress-diff
+          helmfile -e ${{ inputs.globalEnv }} -l app=${{ inputs.appName }} ${{ inputs.helmfileCommand }} ${{ inputs.helmfileParameters }}
 
       - name: Update deployment status (success)
         if: ${{ success() && inputs.globalEnv == 'review' }}
