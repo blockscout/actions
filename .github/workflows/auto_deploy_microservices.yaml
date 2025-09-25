@@ -12,7 +12,7 @@ on:
 jobs:
   plan:
     name: Plan changed microservices
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [github-k8s-dev-runner]
     container:
       image: ubuntu:22.04
     outputs:
