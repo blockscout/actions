@@ -1,0 +1,170 @@
+name: Auto deploy microservices
+
+on:
+  workflow_call:
+    inputs:
+      action:
+        description: 'update-microservices.sh action: apply|diff|sync'
+        required: false
+        default: 'apply'
+        type: string
+
+jobs:
+  plan:
+    name: Plan changed microservices
+    runs-on: [self-hosted, Linux, ARM64]
+    container:
+      image: ubuntu:22.04
+    outputs:
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
+      services_csv: ${{ steps.set-matrix.outputs.services_csv }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: ${{ github.ref }}
+
+      - name: Compute changed microservices
+        id: set-matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Ensure we are on requested branch and have two last commits
+          git rev-parse --verify HEAD >/dev/null
+          AFTER_SHA=$(git rev-parse HEAD)
+          BEFORE_SHA=$(git rev-parse HEAD~1 2>/dev/null || echo "")
+
+          if [[ -n "$BEFORE_SHA" ]]; then
+            CHANGED=$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | tr -d '\r' || true)
+          else
+            # First commit on branch – treat all files as changed
+            CHANGED=$(git ls-files | tr -d '\r' || true)
+          fi
+
+          mapfile -t SERVICES < <(echo "$CHANGED" | awk -F'/' '
+            $1=="helmfile" && $2=="common" && $3=="values" && $4=="microservices" {print $5}
+            $1=="helmfile" && $2 ~ /^k8s-/ && $4=="values" && $5=="microservices" {print $6}
+          ' | sed '/^$/d' | sort -u || true)
+
+          if [[ ${#SERVICES[@]} -eq 0 ]]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "services_csv=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          SERVICES_CSV=$(IFS=, ; echo "${SERVICES[*]}")
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          echo "services_csv=${SERVICES_CSV}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy changed microservices via script
+    needs: plan
+    if: needs.plan.outputs.has_changes == 'true'
+    runs-on: [self-hosted, Linux, ARM64]
+    container:
+      image: ubuntu:22.04
+    permissions: write-all
+    env:
+      SERVICES_CSV: ${{ needs.plan.outputs.services_csv }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.ref }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v2.0
+        with:
+          version: 'v1.25.4'
+
+      - name: Install tools (helm, helmfile, yq)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm plugin install https://github.com/jkroepke/helm-secrets
+          helm plugin install https://github.com/databus23/helm-diff
+          cd /tmp
+          curl -O -L -C - https://github.com/helmfile/helmfile/releases/download/v1.1.0/helmfile_1.1.0_linux_amd64.tar.gz
+          tar -xzvf helmfile_1.1.0_linux_amd64.tar.gz
+          sudo mv helmfile /usr/bin/helmfile
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Get Vault token
+        id: vault-token
+        uses: hashicorp/vault-action@v2.4.1
+        with:
+          url: https://vault.k8s.blockscout.com
+          role: ci-prod
+          path: github-jwt
+          method: jwt
+          tlsSkipVerify: false
+          exportToken: true
+          secrets: |
+            ci/data/dev/kubeconfig/k8s-dev kubeconfig | KUBECONFIG_K8S_DEV_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-pg kubeconfig | KUBECONFIG_K8S_PG_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-prod-1 kubeconfig | KUBECONFIG_K8S_PROD_1_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-prod-2 kubeconfig | KUBECONFIG_K8S_PROD_2_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-prod-3 kubeconfig | KUBECONFIG_K8S_PROD_3_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-prod-4 kubeconfig | KUBECONFIG_K8S_PROD_4_BASE64 ;
+
+      - name: Prepare kubeconfigs and contexts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.kube/config.d
+
+          write_cfg() {
+            local VAR_NAME="$1" FILE_NAME="$2" CTX_NAME="$3"
+            local VAL=${!VAR_NAME:-}
+            [[ -z "$VAL" ]] && return 0
+            echo "$VAL" | base64 --decode > "$FILE_NAME"
+            local CUR_CTX
+            CUR_CTX=$(kubectl --kubeconfig "$FILE_NAME" config current-context || echo "")
+            if [[ -n "$CUR_CTX" && "$CUR_CTX" != "$CTX_NAME" ]]; then
+              kubectl --kubeconfig "$FILE_NAME" config rename-context "$CUR_CTX" "$CTX_NAME" || true
+            fi
+            echo "$FILE_NAME"
+          }
+
+          files=()
+          for spec in \
+            "KUBECONFIG_K8S_DEV_BASE64:~/.kube/config.d/k8s-dev:k8s-dev" \
+            "KUBECONFIG_K8S_PG_BASE64:~/.kube/config.d/k8s-pg:k8s-pg" \
+            "KUBECONFIG_K8S_PROD_1_BASE64:~/.kube/config.d/k8s-prod-1:k8s-prod-1" \
+            "KUBECONFIG_K8S_PROD_2_BASE64:~/.kube/config.d/k8s-prod-2:k8s-prod-2" \
+            "KUBECONFIG_K8S_PROD_3_BASE64:~/.kube/config.d/k8s-prod-3:k8s-prod-3" \
+            "KUBECONFIG_K8S_PROD_4_BASE64:~/.kube/config.d/k8s-prod-4:k8s-prod-4"; do
+            IFS=: read -r var f ctx <<<"$spec"
+            out=$(write_cfg "$var" "$f" "$ctx" || true)
+            [[ -n "${out}" ]] && files+=("$f")
+          done
+
+          if [[ ${#files[@]} -gt 0 ]]; then
+            KUBECONFIG=$(IFS=: ; echo "${files[*]}")
+            echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
+          fi
+
+      - name: Make script executable
+        shell: bash
+        run: chmod +x helmfile/update-microservices.sh
+
+      - name: Run update-microservices.sh
+        shell: bash
+        env:
+          VAULT_TOKEN: ${{ env.VAULT_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SERVICES_CSV}" ]]; then
+            echo "No changed microservices, nothing to deploy"
+            exit 0
+          fi
+          echo "Changed services: ${SERVICES_CSV}"
+          ACTION="${{ inputs.action }}"
+          ./helmfile/update-microservices.sh "$ACTION" --services "${SERVICES_CSV}"
+
+
