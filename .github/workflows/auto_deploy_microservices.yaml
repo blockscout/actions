@@ -9,21 +9,37 @@ on:
         default: 'apply'
         type: string
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   plan:
     name: Plan changed microservices
     runs-on: [github-k8s-dev-runner]
     container:
-      image: ubuntu:24.04
+      image: dtzar/helm-kubectl:3.19
     outputs:
       has_changes: ${{ steps.set-matrix.outputs.has_changes }}
       services_csv: ${{ steps.set-matrix.outputs.services_csv }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-          ref: ${{ github.ref }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          REF="${{ github.ref }}"
+          cd "$GITHUB_WORKSPACE"
+          rm -rf .git
+          git init .
+          git config --local gc.auto 0
+          git config user.email "ci@blockscout.com"
+          git config user.name "blockscout-ci"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
+          git fetch --no-tags --prune --depth=2 origin "${REF}"
+          git checkout -f FETCH_HEAD
 
       - name: Compute changed microservices
         id: set-matrix
@@ -31,8 +47,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          apt-get update -y
-          apt-get install -y git
           # Ensure we are on requested branch and have two last commits
           git rev-parse --verify HEAD >/dev/null
           AFTER_SHA=$(git rev-parse HEAD)
@@ -64,18 +78,30 @@ jobs:
     name: Deploy changed microservices via script
     needs: plan
     if: needs.plan.outputs.has_changes == 'true'
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: [github-k8s-dev-runner]
     container:
-      image: ubuntu:24.04
+      image: dtzar/helm-kubectl:3.19
     permissions: write-all
     env:
       SERVICES_CSV: ${{ needs.plan.outputs.services_csv }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          ref: ${{ github.ref }}
+      - name: Checkout (custom git)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          REF="${{ github.ref }}"
+          cd "$GITHUB_WORKSPACE"
+          rm -rf .git
+          git init .
+          git config --local gc.auto 0
+          git config user.email "ci@blockscout.com"
+          git config user.name "blockscout-ci"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
+          git fetch --no-tags --prune --depth=1 origin "${REF}"
+          git checkout -f FETCH_HEAD
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v2.0
@@ -86,15 +112,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           helm plugin install https://github.com/jkroepke/helm-secrets
           helm plugin install https://github.com/databus23/helm-diff
           cd /tmp
-          curl -O -L -C - https://github.com/helmfile/helmfile/releases/download/v1.1.0/helmfile_1.1.0_linux_amd64.tar.gz
-          tar -xzvf helmfile_1.1.0_linux_amd64.tar.gz
-          sudo mv helmfile /usr/bin/helmfile
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
+          esac
+          curl -sSLo helmfile.tgz https://github.com/helmfile/helmfile/releases/download/v1.1.0/helmfile_1.1.0_linux_${ARCH}.tar.gz
+          tar -xzvf helmfile.tgz
+          mv helmfile /usr/local/bin/helmfile
+          chmod +x /usr/local/bin/helmfile
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}
+          chmod +x /usr/local/bin/yq
 
       - name: Get Vault token
         id: vault-token
