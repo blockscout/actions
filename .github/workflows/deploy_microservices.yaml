@@ -137,14 +137,31 @@ jobs:
           chmod +x helmfile/update-microservices.sh
           echo "KUBECONFIG=$KUBECONFIG"
           ls -l ${HOME}/.kube/config.d || true
-          kubectl --kubeconfig "${HOME}/.kube/config.d/k8s-dev" config get-contexts -o name
           ACTION="${{ inputs.action }}"
-          if [[ -z "${SERVICES_CSV:-}" ]]; then
-            echo "Deploying all microservices"
-            ./helmfile/update-microservices.sh "$ACTION"
-            exit 0
+
+          # Determine available clusters by checking per-cluster kubeconfig files
+          declare -a CLUSTERS=(k8s-dev k8s-pg k8s-prod-1 k8s-prod-2 k8s-prod-3 k8s-prod-4)
+          declare -a SELECTED=()
+          for c in "${CLUSTERS[@]}"; do
+            f="${HOME}/.kube/config.d/${c}"
+            [[ -s "$f" ]] && SELECTED+=("$c")
+          done
+          if [[ ${#SELECTED[@]} -eq 0 ]]; then
+            echo "No per-cluster kubeconfig files found in ${HOME}/.kube/config.d" >&2
+            exit 1
           fi
-          echo "Changed services: ${SERVICES_CSV}"
-          ./helmfile/update-microservices.sh "$ACTION" --services "${SERVICES_CSV}"
+
+          # Run sequentially per context, setting KUBECONFIG to the cluster-specific file
+          for ctx in "${SELECTED[@]}"; do
+            echo "=== Running for context: ${ctx} ==="
+            export KUBECONFIG="${HOME}/.kube/config.d/${ctx}"
+            if [[ -z "${SERVICES_CSV:-}" ]]; then
+              echo "Deploying all microservices in ${ctx}"
+              ./helmfile/update-microservices.sh "$ACTION" --clusters "$ctx"
+            else
+              echo "Changed services in ${ctx}: ${SERVICES_CSV}"
+              ./helmfile/update-microservices.sh "$ACTION" --clusters "$ctx" --services "${SERVICES_CSV}"
+            fi
+          done
 
 
