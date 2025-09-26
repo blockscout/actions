@@ -28,7 +28,7 @@ jobs:
         with:
           fetch-depth: "1"
 
-      - name: Install tools (helm, helmfile, yq)
+      - name: Install tools
         shell: bash
         run: |
           set -euo pipefail
@@ -78,7 +78,7 @@ jobs:
             ci/data/prod/kubeconfig/k8s-prod-1 kubeconfig | KUBECONFIG_K8S_PROD_1_BASE64 ;
             ci/data/prod/kubeconfig/k8s-prod-2 kubeconfig | KUBECONFIG_K8S_PROD_2_BASE64 ;
             ci/data/prod/kubeconfig/k8s-prod-3 kubeconfig | KUBECONFIG_K8S_PROD_3_BASE64 ;
-            ci/data/prod/kubeconfig/k8s-prod-4 kubeconfig | KUBECONFIG_K8S_PROD_4_BASE64 ;
+            #ci/data/prod/kubeconfig/k8s-prod-4 kubeconfig | KUBECONFIG_K8S_PROD_4_BASE64 ;
 
       - name: Prepare kubeconfigs and contexts
         shell: bash
@@ -114,8 +114,8 @@ jobs:
             "KUBECONFIG_K8S_PG_BASE64:${HOME}/.kube/config.d/k8s-pg:k8s-pg",
             "KUBECONFIG_K8S_PROD_1_BASE64:${HOME}/.kube/config.d/k8s-prod-1:k8s-prod-1",
             "KUBECONFIG_K8S_PROD_2_BASE64:${HOME}/.kube/config.d/k8s-prod-2:k8s-prod-2",
-            "KUBECONFIG_K8S_PROD_3_BASE64:${HOME}/.kube/config.d/k8s-prod-3:k8s-prod-3",
-            "KUBECONFIG_K8S_PROD_4_BASE64:${HOME}/.kube/config.d/k8s-prod-4:k8s-prod-4"
+            "KUBECONFIG_K8S_PROD_3_BASE64:${HOME}/.kube/config.d/k8s-prod-3:k8s-prod-3"
+            #"KUBECONFIG_K8S_PROD_4_BASE64:${HOME}/.kube/config.d/k8s-prod-4:k8s-prod-4"
           )
           for spec in "${specs[@]}"; do
             IFS=: read -r var f ctx <<<"$spec"
