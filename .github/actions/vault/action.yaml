@@ -66,7 +66,7 @@ runs:
   steps:
     - name: Authenticate to Vault and export secrets
       id: auth
-      shell: bash
+      shell: sh
       env:
         VAULT_URL: ${{ inputs.url }}
         VAULT_ROLE: ${{ inputs.role }}
@@ -83,7 +83,11 @@ runs:
         EXTRA_HEADERS: ${{ inputs.extraHeaders }}
         TOKEN_INPUT: ${{ inputs.token }}
       run: |
-        set -euo pipefail
+        set -eu
+
+        to_lower() {
+          printf %s "$1" | tr '[:upper:]' '[:lower:]'
+        }
 
         ensure_yq() {
           ARCH=$(uname -m)
@@ -95,28 +99,30 @@ runs:
           YQ_BIN="/usr/local/bin/yq"
           if [ ! -w "/usr/local/bin" ]; then
             YQ_BIN="/tmp/yq"
-            export PATH="/tmp:$PATH"
+            PATH="/tmp:$PATH"; export PATH
           fi
           wget -qO "$YQ_BIN" "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}"
           chmod +x "$YQ_BIN"
         }
 
-        CURL_FLAGS=("-sS")
-        if [ "${TLS_SKIP_VERIFY,,}" = "true" ]; then
-          CURL_FLAGS+=("-k")
+        # Build curl flags using positional params (portable for sh)
+        set -- -sS
+        if [ "$(to_lower "${TLS_SKIP_VERIFY}")" = "true" ]; then
+          set -- "$@" -k
         fi
-
-        # Additional headers
         if [ -n "${NAMESPACE}" ]; then
-          CURL_FLAGS+=("-H" "X-Vault-Namespace: ${NAMESPACE}")
+          set -- "$@" -H "X-Vault-Namespace: ${NAMESPACE}"
         fi
         if [ -n "${EXTRA_HEADERS}" ]; then
           while IFS= read -r header; do
-            h=$(echo "$header" | sed 's/[[:space:]]*$//')
+            h=$(printf %s "$header" | sed 's/[[:space:]]*$//')
             [ -z "$h" ] && continue
-            CURL_FLAGS+=("-H" "$h")
-          done <<<'${EXTRA_HEADERS}'
+            set -- "$@" -H "$h"
+          done <<EOF
+          ${EXTRA_HEADERS}
+          EOF
         fi
+        CURL_FLAGS="$@"
 
         ensure_yq
 
@@ -136,16 +142,18 @@ runs:
             if [ -n "${AUD}" ]; then
               OIDC_URL="${OIDC_URL}&audience=${AUD}"
             fi
-            OIDC_JSON=$(curl -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${OIDC_URL}" "${CURL_FLAGS[@]}")
-            OIDC_TOKEN=$(echo "${OIDC_JSON}" | "$YQ_BIN" -p=json -r '.value' -)
+            # shellcheck disable=SC2086
+            OIDC_JSON=$(curl -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" ${CURL_FLAGS} "${OIDC_URL}")
+            OIDC_TOKEN=$(printf %s "${OIDC_JSON}" | "$YQ_BIN" -p=json -r '.value' -)
             if [ -z "${OIDC_TOKEN}" ] || [ "${OIDC_TOKEN}" = "null" ]; then
               echo "Failed to obtain OIDC token" >&2
               echo "${OIDC_JSON}" >&2
               exit 1
             fi
             LOGIN_BODY=$(printf '{"role":"%s","jwt":"%s"}' "${VAULT_ROLE}" "${OIDC_TOKEN}")
-            LOGIN_JSON=$(curl "${CURL_FLAGS[@]}" -H 'Content-Type: application/json' -X POST "${VAULT_URL}/v1/auth/${VAULT_AUTH_PATH}/login" -d "${LOGIN_BODY}")
-            VAULT_TOKEN=$(echo "${LOGIN_JSON}" | "$YQ_BIN" -p=json -r '.auth.client_token' -)
+            # shellcheck disable=SC2086
+            LOGIN_JSON=$(curl ${CURL_FLAGS} -H 'Content-Type: application/json' -X POST "${VAULT_URL}/v1/auth/${VAULT_AUTH_PATH}/login" -d "${LOGIN_BODY}")
+            VAULT_TOKEN=$(printf %s "${LOGIN_JSON}" | "$YQ_BIN" -p=json -r '.auth.client_token' -)
             ;;
           *)
             echo "Unsupported method: ${METHOD}" >&2
@@ -159,42 +167,38 @@ runs:
         fi
 
         echo "::add-mask::${VAULT_TOKEN}"
-        if [ "${OUTPUT_TOKEN,,}" = "true" ]; then
+        if [ "$(to_lower "${OUTPUT_TOKEN}")" = "true" ]; then
           echo "vault_token=${VAULT_TOKEN}" >> "$GITHUB_OUTPUT"
         fi
-        if [ "${EXPORT_TOKEN,,}" = "true" ]; then
+        if [ "$(to_lower "${EXPORT_TOKEN}")" = "true" ]; then
           echo "VAULT_TOKEN=${VAULT_TOKEN}" >> "$GITHUB_ENV"
         fi
 
         # Parse secrets spec
         if [ -n "${SECRETS_SPEC}" ]; then
-          # Normalize newlines and semicolons as separators
-          NORMALIZED=$(printf "%s\n" "${SECRETS_SPEC}" | tr -d '\r')
-          IFS=$'\n' read -r -d '' -a LINES < <(printf "%s\n" "${NORMALIZED}" && printf '\0')
-          for raw in "${LINES[@]}"; do
-            line=$(echo "$raw" | sed 's/[[:space:]]*$//')
+          printf "%s\n" "${SECRETS_SPEC}" | tr -d '\r' | while IFS= read -r raw; do
+            line=$(printf %s "$raw" | sed 's/[[:space:]]*$//')
             [ -z "$line" ] && continue
-            # Strip trailing ; if present
-            line=$(echo "$line" | sed 's/[[:space:]]*;[[:space:]]*$//')
+            line=$(printf %s "$line" | sed 's/[[:space:]]*;[[:space:]]*$//')
             [ -z "$line" ] && continue
-            # Split by |
-            left=$(printf "%s" "$line" | awk -F '|' '{print $1}')
-            right=$(printf "%s" "$line" | awk -F '|' '{print $2}')
-            left=$(echo "$left" | xargs)
-            right=$(echo "$right" | xargs)
+            left=$(printf %s "$line" | awk -F '|' '{print $1}')
+            right=$(printf %s "$line" | awk -F '|' '{print $2}')
+            left=$(printf %s "$left" | xargs)
+            right=$(printf %s "$right" | xargs)
             [ -z "$left" ] && continue
             [ -z "$right" ] && continue
-            vault_path=$(printf "%s" "$left" | awk '{print $1}')
-            key=$(printf "%s" "$left" | awk '{print $2}')
+            vault_path=$(printf %s "$left" | awk '{print $1}')
+            key=$(printf %s "$left" | awk '{print $2}')
             env_name="$right"
             if [ -z "$vault_path" ] || [ -z "$key" ] || [ -z "$env_name" ]; then
               echo "Invalid secret spec: $line" >&2
               exit 1
             fi
-            SECRET_JSON=$(curl "${CURL_FLAGS[@]}" -H "X-Vault-Token: ${VAULT_TOKEN}" "${VAULT_URL}/v1/${vault_path}")
-            value=$(echo "${SECRET_JSON}" | "$YQ_BIN" -p=json -r ".data.data[\"${key}\"]" -)
+            # shellcheck disable=SC2086
+            SECRET_JSON=$(curl ${CURL_FLAGS} -H "X-Vault-Token: ${VAULT_TOKEN}" "${VAULT_URL}/v1/${vault_path}")
+            value=$(printf %s "${SECRET_JSON}" | "$YQ_BIN" -p=json -r ".data.data[\"${key}\"]" -)
             if [ -z "${value}" ] || [ "${value}" = "null" ]; then
-              if [ "${IGNORE_NOT_FOUND,,}" = "true" ]; then
+              if [ "$(to_lower "${IGNORE_NOT_FOUND}")" = "true" ]; then
                 continue
               else
                 echo "Failed to read key '${key}' from '${vault_path}'" >&2
@@ -203,26 +207,18 @@ runs:
               fi
             fi
             echo "::add-mask::${value}"
-            if [ "${EXPORT_ENV,,}" = "true" ]; then
-              if printf %s "$value" | grep -q $'\n'; then
-                {
-                  echo "${env_name}<<__EOF__"
-                  printf "%s\n" "$value"
-                  echo "__EOF__"
-                } >> "$GITHUB_ENV"
-              else
-                echo "${env_name}=${value}" >> "$GITHUB_ENV"
-              fi
+            if [ "$(to_lower "${EXPORT_ENV}")" = "true" ]; then
+              {
+                echo "${env_name}<<__EOF__"
+                printf "%s\n" "$value"
+                echo "__EOF__"
+              } >> "$GITHUB_ENV"
             else
-              if printf %s "$value" | grep -q $'\n'; then
-                {
-                  echo "${env_name}<<__EOF__"
-                  printf "%s\n" "$value"
-                  echo "__EOF__"
-                } >> "$GITHUB_OUTPUT"
-              else
-                echo "${env_name}=${value}" >> "$GITHUB_OUTPUT"
-              fi
+              {
+                echo "${env_name}<<__EOF__"
+                printf "%s\n" "$value"
+                echo "__EOF__"
+              } >> "$GITHUB_OUTPUT"
             fi
           done
         fi
