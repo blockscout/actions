@@ -34,8 +34,7 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           rm -rf .git
           git init .
-          git config --local gc.auto 0
-          git config --global init.defaultBranch "main"
+          git config --global gc.auto 0
           git config user.email "ci@blockscout.com"
           git config user.name "blockscout-ci"
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
