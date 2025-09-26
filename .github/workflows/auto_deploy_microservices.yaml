@@ -179,7 +179,7 @@ jobs:
         run: |
           set -euo pipefail
           ACTION="${{ inputs.action }}"
-          if [[ -z "${SERVICES_CSV}" ]]; then
+          if [[ -z "${SERVICES_CSV:-}" ]]; then
             echo "Deploying all microservices"
             ./helmfile/update-microservices.sh "$ACTION"
             exit 0
