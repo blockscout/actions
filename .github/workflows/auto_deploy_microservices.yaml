@@ -111,23 +111,23 @@ jobs:
           secrets: |
             ci/data/dev/kubeconfig/k8s-dev kubeconfig | KUBECONFIG_K8S_DEV_BASE64 ;
 
-      - name: Get Vault prod kubeconfigs
-        id: vault-prod
-        uses: blockscout/actions/.github/actions/vault@main
-        with:
-          url: https://vault.k8s.blockscout.com
-          method: jwt
-          role: ci-prod
-          path: github-jwt
-          jwtGithubAudience: "https://github.com/blockscout"
-          tlsSkipVerify: "false"
-          exportToken: "true"
-          secrets: |
-            ci/data/prod/kubeconfig/k8s-pg kubeconfig | KUBECONFIG_K8S_PG_BASE64 ;
-            ci/data/prod/kubeconfig/k8s-prod-1 kubeconfig | KUBECONFIG_K8S_PROD_1_BASE64 ;
-            ci/data/prod/kubeconfig/k8s-prod-2 kubeconfig | KUBECONFIG_K8S_PROD_2_BASE64 ;
-            ci/data/prod/kubeconfig/k8s-prod-3 kubeconfig | KUBECONFIG_K8S_PROD_3_BASE64 ;
-            ci/data/prod/kubeconfig/k8s-prod-4 kubeconfig | KUBECONFIG_K8S_PROD_4_BASE64 ;
+      # - name: Get Vault prod kubeconfigs
+      #   id: vault-prod
+      #   uses: blockscout/actions/.github/actions/vault@main
+      #   with:
+      #     url: https://vault.k8s.blockscout.com
+      #     method: jwt
+      #     role: ci-prod
+      #     path: github-jwt
+      #     jwtGithubAudience: "https://github.com/blockscout"
+      #     tlsSkipVerify: "false"
+      #     exportToken: "true"
+      #     secrets: |
+      #       ci/data/prod/kubeconfig/k8s-pg kubeconfig | KUBECONFIG_K8S_PG_BASE64 ;
+      #       ci/data/prod/kubeconfig/k8s-prod-1 kubeconfig | KUBECONFIG_K8S_PROD_1_BASE64 ;
+      #       ci/data/prod/kubeconfig/k8s-prod-2 kubeconfig | KUBECONFIG_K8S_PROD_2_BASE64 ;
+      #       ci/data/prod/kubeconfig/k8s-prod-3 kubeconfig | KUBECONFIG_K8S_PROD_3_BASE64 ;
+      #       ci/data/prod/kubeconfig/k8s-prod-4 kubeconfig | KUBECONFIG_K8S_PROD_4_BASE64 ;
 
       - name: Prepare kubeconfigs and contexts
         shell: bash
@@ -150,12 +150,13 @@ jobs:
 
           files=()
           for spec in \
-            "KUBECONFIG_K8S_DEV_BASE64:~/.kube/config.d/k8s-dev:k8s-dev" \
-            "KUBECONFIG_K8S_PG_BASE64:~/.kube/config.d/k8s-pg:k8s-pg" \
-            "KUBECONFIG_K8S_PROD_1_BASE64:~/.kube/config.d/k8s-prod-1:k8s-prod-1" \
-            "KUBECONFIG_K8S_PROD_2_BASE64:~/.kube/config.d/k8s-prod-2:k8s-prod-2" \
-            "KUBECONFIG_K8S_PROD_3_BASE64:~/.kube/config.d/k8s-prod-3:k8s-prod-3" \
-            "KUBECONFIG_K8S_PROD_4_BASE64:~/.kube/config.d/k8s-prod-4:k8s-prod-4"; do
+            # "KUBECONFIG_K8S_DEV_BASE64:~/.kube/config.d/k8s-dev:k8s-dev" \
+            # "KUBECONFIG_K8S_PG_BASE64:~/.kube/config.d/k8s-pg:k8s-pg" \
+            # "KUBECONFIG_K8S_PROD_1_BASE64:~/.kube/config.d/k8s-prod-1:k8s-prod-1" \
+            # "KUBECONFIG_K8S_PROD_2_BASE64:~/.kube/config.d/k8s-prod-2:k8s-prod-2" \
+            # "KUBECONFIG_K8S_PROD_3_BASE64:~/.kube/config.d/k8s-prod-3:k8s-prod-3" \
+            # "KUBECONFIG_K8S_PROD_4_BASE64:~/.kube/config.d/k8s-prod-4:k8s-prod-4"; do
+            "KUBECONFIG_K8S_DEV_BASE64:~/.kube/config.d/k8s-dev:k8s-dev"; do
             IFS=: read -r var f ctx <<<"$spec"
             out=$(write_cfg "$var" "$f" "$ctx" || true)
             [[ -n "${out}" ]] && files+=("$f")
