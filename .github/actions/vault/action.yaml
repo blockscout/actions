@@ -86,22 +86,19 @@ runs:
         set -euo pipefail
 
         ensure_yq() {
-          if command -v yq >/dev/null 2>&1; then
-            return 0
-          fi
           ARCH=$(uname -m)
           case "$ARCH" in
             x86_64|amd64) ARCH=amd64 ;;
             aarch64|arm64) ARCH=arm64 ;;
             *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
           esac
-          TMP_YQ="/usr/local/bin/yq"
+          YQ_BIN="/usr/local/bin/yq"
           if [ ! -w "/usr/local/bin" ]; then
-            TMP_YQ="/tmp/yq"
+            YQ_BIN="/tmp/yq"
             export PATH="/tmp:$PATH"
           fi
-          wget -qO "$TMP_YQ" "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}"
-          chmod +x "$TMP_YQ"
+          wget -qO "$YQ_BIN" "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}"
+          chmod +x "$YQ_BIN"
         }
 
         CURL_FLAGS=("-sS")
@@ -140,7 +137,7 @@ runs:
               OIDC_URL="${OIDC_URL}&audience=${AUD}"
             fi
             OIDC_JSON=$(curl -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${OIDC_URL}" "${CURL_FLAGS[@]}")
-            OIDC_TOKEN=$(echo "${OIDC_JSON}" | yq -p=json -r '.value')
+            OIDC_TOKEN=$(echo "${OIDC_JSON}" | "$YQ_BIN" -p=json -r '.value' -)
             if [ -z "${OIDC_TOKEN}" ] || [ "${OIDC_TOKEN}" = "null" ]; then
               echo "Failed to obtain OIDC token" >&2
               echo "${OIDC_JSON}" >&2
@@ -148,7 +145,7 @@ runs:
             fi
             LOGIN_BODY=$(printf '{"role":"%s","jwt":"%s"}' "${VAULT_ROLE}" "${OIDC_TOKEN}")
             LOGIN_JSON=$(curl "${CURL_FLAGS[@]}" -H 'Content-Type: application/json' -X POST "${VAULT_URL}/v1/auth/${VAULT_AUTH_PATH}/login" -d "${LOGIN_BODY}")
-            VAULT_TOKEN=$(echo "${LOGIN_JSON}" | yq -p=json -r '.auth.client_token')
+            VAULT_TOKEN=$(echo "${LOGIN_JSON}" | "$YQ_BIN" -p=json -r '.auth.client_token' -)
             ;;
           *)
             echo "Unsupported method: ${METHOD}" >&2
@@ -195,7 +192,7 @@ runs:
               exit 1
             fi
             SECRET_JSON=$(curl "${CURL_FLAGS[@]}" -H "X-Vault-Token: ${VAULT_TOKEN}" "${VAULT_URL}/v1/${vault_path}")
-            value=$(echo "${SECRET_JSON}" | yq -p=json -r ".data.data[\"${key}\"]")
+            value=$(echo "${SECRET_JSON}" | "$YQ_BIN" -p=json -r ".data.data[\"${key}\"]" -)
             if [ -z "${value}" ] || [ "${value}" = "null" ]; then
               if [ "${IGNORE_NOT_FOUND,,}" = "true" ]; then
                 continue
