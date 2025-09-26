@@ -14,7 +14,7 @@ jobs:
     name: Plan changed microservices
     runs-on: [github-k8s-dev-runner]
     container:
-      image: ubuntu:22.04
+      image: dtzar/helm-kubectl:3.19
     outputs:
       has_changes: ${{ steps.set-matrix.outputs.has_changes }}
       services_csv: ${{ steps.set-matrix.outputs.services_csv }}
@@ -64,7 +64,7 @@ jobs:
     if: needs.plan.outputs.has_changes == 'true'
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: ubuntu:22.04
+      image: dtzar/helm-kubectl:3.19
     permissions: write-all
     env:
       SERVICES_CSV: ${{ needs.plan.outputs.services_csv }}
@@ -84,7 +84,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           helm plugin install https://github.com/jkroepke/helm-secrets
           helm plugin install https://github.com/databus23/helm-diff
           cd /tmp
