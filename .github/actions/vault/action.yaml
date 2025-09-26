@@ -114,13 +114,14 @@ runs:
           set -- "$@" -H "X-Vault-Namespace: ${NAMESPACE}"
         fi
         if [ -n "${EXTRA_HEADERS}" ]; then
-          while IFS= read -r header; do
+          OLD_IFS=$IFS
+          IFS='\n'
+          for header in $(printf '%s\n' "${EXTRA_HEADERS}"); do
             h=$(printf %s "$header" | sed 's/[[:space:]]*$//')
             [ -z "$h" ] && continue
             set -- "$@" -H "$h"
-          done <<EOF
-          ${EXTRA_HEADERS}
-          EOF
+          done
+          IFS=$OLD_IFS
         fi
         CURL_FLAGS="$@"
 
