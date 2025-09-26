@@ -68,7 +68,9 @@ jobs:
     runs-on: [github-k8s-dev-runner]
     container:
       image: dtzar/helm-kubectl:3.19
-    permissions: write-all
+    permissions:
+      contents: read
+      id-token: write
     #env:
     #  SERVICES_CSV: ${{ needs.plan.outputs.services_csv }}
     steps:
@@ -168,16 +170,13 @@ jobs:
             echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
           fi
 
-      - name: Make script executable
-        shell: bash
-        run: chmod +x helmfile/update-microservices.sh
-
       - name: Run update-microservices.sh
         shell: bash
         env:
           VAULT_TOKEN: ${{ env.VAULT_TOKEN }}
         run: |
           set -euo pipefail
+          chmod +x helmfile/update-microservices.sh
           ACTION="${{ inputs.action }}"
           if [[ -z "${SERVICES_CSV:-}" ]]; then
             echo "Deploying all microservices"
