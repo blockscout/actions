@@ -15,11 +15,11 @@ inputs:
     description: "OIDC audience for token request"
     required: false
     default: "vault"
-  tls-skip-verify:
+  tls_skip_verify:
     description: "Skip TLS verification (true/false)"
     required: false
     default: "false"
-  export-token:
+  export_token:
     description: "Export VAULT_TOKEN to GITHUB_ENV (true/false)"
     required: false
     default: "true"
@@ -44,8 +44,8 @@ runs:
         VAULT_ROLE: ${{ inputs.role }}
         VAULT_AUTH_PATH: ${{ inputs.path }}
         OIDC_AUDIENCE: ${{ inputs.audience }}
-        TLS_SKIP_VERIFY: ${{ inputs["tls-skip-verify"] }}
-        EXPORT_TOKEN: ${{ inputs["export-token"] }}
+        TLS_SKIP_VERIFY: ${{ inputs.tls_skip_verify }}
+        EXPORT_TOKEN: ${{ inputs.export_token }}
         SECRETS_SPEC: ${{ inputs.secrets }}
       run: |
         set -euo pipefail
