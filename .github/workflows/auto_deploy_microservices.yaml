@@ -1,4 +1,4 @@
-name: Auto deploy microservices
+name: Deploy microservices
 
 on:
   workflow_call:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   plan:
-    name: Plan changed microservices
+    name: Plan
     runs-on: [github-k8s-dev-runner]
     container:
       image: dtzar/helm-kubectl:3.19
@@ -62,7 +62,7 @@ jobs:
           echo "services_csv=${SERVICES_CSV}" >> "$GITHUB_OUTPUT"
 
   deploy:
-    name: Deploy changed microservices via script
+    name: Deploy changed microservices
     needs: plan
     if: needs.plan.outputs.has_changes == 'true'
     runs-on: [github-k8s-dev-runner]
@@ -97,18 +97,28 @@ jobs:
           wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}
           chmod +x /usr/local/bin/yq
 
-      - name: Get Vault token
-        id: vault-token
-        uses: hashicorp/vault-action@v2.4.1
+      - name: Get Vault dev kubeconfig
+        id: vault-dev
+        uses: blockscout/actions/.github/actions/vault@main
+        with:
+          url: https://vault.k8s.blockscout.com
+          role: ci-dev
+          path: github-jwt
+          tls-skip-verify: "false"
+          export-token: "true"
+          secrets: |
+            ci/data/dev/kubeconfig/k8s-dev kubeconfig | KUBECONFIG_K8S_DEV_BASE64 ;
+
+      - name: Get Vault prod kubeconfigs
+        id: vault-prod
+        uses: blockscout/actions/.github/actions/vault@main
         with:
           url: https://vault.k8s.blockscout.com
           role: ci-prod
           path: github-jwt
-          method: jwt
-          tlsSkipVerify: false
-          exportToken: true
+          tls-skip-verify: "false"
+          export-token: "true"
           secrets: |
-            ci/data/dev/kubeconfig/k8s-dev kubeconfig | KUBECONFIG_K8S_DEV_BASE64 ;
             ci/data/prod/kubeconfig/k8s-pg kubeconfig | KUBECONFIG_K8S_PG_BASE64 ;
             ci/data/prod/kubeconfig/k8s-prod-1 kubeconfig | KUBECONFIG_K8S_PROD_1_BASE64 ;
             ci/data/prod/kubeconfig/k8s-prod-2 kubeconfig | KUBECONFIG_K8S_PROD_2_BASE64 ;
