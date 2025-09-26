@@ -1,0 +1,29 @@
+name: "Checkout"
+description: "Checkout repository via git init/fetch"
+inputs:
+  fetch-depth:
+    description: "Fetch depth"
+    required: false
+    default: "1"
+runs:
+  using: "composite"
+  steps:
+    - name: Сheckout via git
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        REPO="${{ github.repository }}"
+        REF="${{ github.ref }}"
+        cd "$GITHUB_WORKSPACE"
+        rm -rf .git
+        git init .
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        git config --global gc.auto 0
+        git config --global user.email "ci@blockscout.com"
+        git config --global user.name "blockscout-ci"
+        git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
+        git fetch --no-tags --prune --depth=${{ inputs.fetch-depth }} origin "${REF}"
+        git checkout -f FETCH_HEAD
+
