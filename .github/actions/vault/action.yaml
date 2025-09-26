@@ -204,9 +204,25 @@ runs:
             fi
             echo "::add-mask::${value}"
             if [ "${EXPORT_ENV,,}" = "true" ]; then
-              echo "${env_name}=${value}" >> "$GITHUB_ENV"
+              if printf %s "$value" | grep -q $'\n'; then
+                {
+                  echo "${env_name}<<__EOF__"
+                  printf "%s\n" "$value"
+                  echo "__EOF__"
+                } >> "$GITHUB_ENV"
+              else
+                echo "${env_name}=${value}" >> "$GITHUB_ENV"
+              fi
             else
-              echo "${env_name}=${value}" >> "$GITHUB_OUTPUT"
+              if printf %s "$value" | grep -q $'\n'; then
+                {
+                  echo "${env_name}<<__EOF__"
+                  printf "%s\n" "$value"
+                  echo "__EOF__"
+                } >> "$GITHUB_OUTPUT"
+              else
+                echo "${env_name}=${value}" >> "$GITHUB_OUTPUT"
+              fi
             fi
           done
         fi

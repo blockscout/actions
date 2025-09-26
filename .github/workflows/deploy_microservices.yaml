@@ -141,9 +141,18 @@ jobs:
             local VAR_NAME="$1" FILE_NAME="$2" CTX_NAME="$3"
             local VAL=${!VAR_NAME:-}
             [[ -z "$VAL" ]] && return 0
-            echo "$VAL" | base64 --decode > "$FILE_NAME"
+            # Decode robustly even for multiline values
+            printf %s "$VAL" | base64 -d > "$FILE_NAME"
+            # Ensure file is non-empty
+            if [[ ! -s "$FILE_NAME" ]]; then
+              echo "Decoded kubeconfig is empty: $FILE_NAME" >&2
+              return 1
+            fi
             local CUR_CTX
-            CUR_CTX=$(kubectl --kubeconfig "$FILE_NAME" config current-context || echo "")
+            CUR_CTX=$(kubectl --kubeconfig "$FILE_NAME" config current-context 2>/dev/null || true)
+            if [[ -z "$CUR_CTX" ]]; then
+              CUR_CTX=$(kubectl --kubeconfig "$FILE_NAME" config get-contexts -o name | head -n1 || true)
+            fi
             if [[ -n "$CUR_CTX" && "$CUR_CTX" != "$CTX_NAME" ]]; then
               kubectl --kubeconfig "$FILE_NAME" config rename-context "$CUR_CTX" "$CTX_NAME" || true
             fi
