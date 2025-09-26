@@ -24,7 +24,7 @@ jobs:
       services_csv: ${{ steps.set-matrix.outputs.services_csv }}
     steps:
       - name: Checkout
-        uses: ./.github/actions/custom-checkout
+        uses: blockscout/actions/.github/actions/checkout@main
         with:
           fetch-depth: "2"
 
@@ -73,7 +73,7 @@ jobs:
       SERVICES_CSV: ${{ needs.plan.outputs.services_csv }}
     steps:
       - name: Checkout
-        uses: ./.github/actions/custom-checkout
+        uses: blockscout/actions/.github/actions/checkout@main
         with:
           fetch-depth: "1"
 
