@@ -14,65 +14,14 @@ permissions:
   id-token: write
 
 jobs:
-  # plan:
-  #   name: Plan
-  #   runs-on: [github-k8s-dev-runner]
-  #   container:
-  #     image: dtzar/helm-kubectl:3.19
-  #   outputs:
-  #     has_changes: ${{ steps.set-matrix.outputs.has_changes }}
-  #     services_csv: ${{ steps.set-matrix.outputs.services_csv }}
-  #   steps:
-  #     - name: Checkout
-  #       uses: blockscout/actions/.github/actions/checkout@main
-  #       with:
-  #         fetch-depth: "2"
-
-  #     - name: Compute changed microservices
-  #       id: set-matrix
-  #       shell: bash
-  #       run: |
-  #         set -euo pipefail
-
-  #         # Ensure we are on requested branch and have two last commits
-  #         git rev-parse --verify HEAD >/dev/null
-  #         AFTER_SHA=$(git rev-parse HEAD)
-  #         BEFORE_SHA=$(git rev-parse HEAD~1 2>/dev/null || echo "")
-
-  #         if [[ -n "$BEFORE_SHA" ]]; then
-  #           CHANGED=$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | tr -d '\r' || true)
-  #         else
-  #           # First commit on branch – treat all files as changed
-  #           CHANGED=$(git ls-files | tr -d '\r' || true)
-  #         fi
-
-  #         mapfile -t SERVICES < <(echo "$CHANGED" | awk -F'/' '
-  #           $1=="helmfile" && $2=="common" && $3=="values" && $4=="microservices" {print $5}
-  #           $1=="helmfile" && $2 ~ /^k8s-/ && $4=="values" && $5=="microservices" {print $6}
-  #         ' | sed '/^$/d' | sort -u || true)
-
-  #         if [[ ${#SERVICES[@]} -eq 0 ]]; then
-  #           echo "has_changes=false" >> "$GITHUB_OUTPUT"
-  #           echo "services_csv=" >> "$GITHUB_OUTPUT"
-  #           exit 0
-  #         fi
-
-  #         SERVICES_CSV=$(IFS=, ; echo "${SERVICES[*]}")
-  #         echo "has_changes=true" >> "$GITHUB_OUTPUT"
-  #         echo "services_csv=${SERVICES_CSV}" >> "$GITHUB_OUTPUT"
-
   deploy:
     name: Deploy
-    #needs: plan
-    #if: needs.plan.outputs.has_changes == 'true'
     runs-on: [github-k8s-dev-runner]
     container:
       image: dtzar/helm-kubectl:3.19
     permissions:
       contents: read
       id-token: write
-    #env:
-    #  SERVICES_CSV: ${{ needs.plan.outputs.services_csv }}
     steps:
       - name: Checkout
         uses: blockscout/actions/.github/actions/checkout@main
@@ -113,23 +62,23 @@ jobs:
           secrets: |
             ci/data/dev/kubeconfig/k8s-dev kubeconfig | KUBECONFIG_K8S_DEV_BASE64 ;
 
-      # - name: Get Vault prod kubeconfigs
-      #   id: vault-prod
-      #   uses: blockscout/actions/.github/actions/vault@main
-      #   with:
-      #     url: https://vault.k8s.blockscout.com
-      #     method: jwt
-      #     role: ci-prod
-      #     path: github-jwt
-      #     jwtGithubAudience: "https://github.com/blockscout"
-      #     tlsSkipVerify: "false"
-      #     exportToken: "true"
-      #     secrets: |
-      #       ci/data/prod/kubeconfig/k8s-pg kubeconfig | KUBECONFIG_K8S_PG_BASE64 ;
-      #       ci/data/prod/kubeconfig/k8s-prod-1 kubeconfig | KUBECONFIG_K8S_PROD_1_BASE64 ;
-      #       ci/data/prod/kubeconfig/k8s-prod-2 kubeconfig | KUBECONFIG_K8S_PROD_2_BASE64 ;
-      #       ci/data/prod/kubeconfig/k8s-prod-3 kubeconfig | KUBECONFIG_K8S_PROD_3_BASE64 ;
-      #       ci/data/prod/kubeconfig/k8s-prod-4 kubeconfig | KUBECONFIG_K8S_PROD_4_BASE64 ;
+      - name: Get Vault prod kubeconfigs
+        id: vault-prod
+        uses: blockscout/actions/.github/actions/vault@main
+        with:
+          url: https://vault.k8s.blockscout.com
+          method: jwt
+          role: ci-prod
+          path: github-jwt
+          jwtGithubAudience: "https://github.com/blockscout"
+          tlsSkipVerify: "false"
+          exportToken: "true"
+          secrets: |
+            ci/data/prod/kubeconfig/k8s-pg kubeconfig | KUBECONFIG_K8S_PG_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-prod-1 kubeconfig | KUBECONFIG_K8S_PROD_1_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-prod-2 kubeconfig | KUBECONFIG_K8S_PROD_2_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-prod-3 kubeconfig | KUBECONFIG_K8S_PROD_3_BASE64 ;
+            ci/data/prod/kubeconfig/k8s-prod-4 kubeconfig | KUBECONFIG_K8S_PROD_4_BASE64 ;
 
       - name: Prepare kubeconfigs and contexts
         shell: bash
@@ -161,12 +110,12 @@ jobs:
 
           files=()
           specs=(
-            "KUBECONFIG_K8S_DEV_BASE64:${HOME}/.kube/config.d/k8s-dev:k8s-dev"
-            # "KUBECONFIG_K8S_PG_BASE64:${HOME}/.kube/config.d/k8s-pg:k8s-pg"
-            # "KUBECONFIG_K8S_PROD_1_BASE64:${HOME}/.kube/config.d/k8s-prod-1:k8s-prod-1"
-            # "KUBECONFIG_K8S_PROD_2_BASE64:${HOME}/.kube/config.d/k8s-prod-2:k8s-prod-2"
-            # "KUBECONFIG_K8S_PROD_3_BASE64:${HOME}/.kube/config.d/k8s-prod-3:k8s-prod-3"
-            # "KUBECONFIG_K8S_PROD_4_BASE64:${HOME}/.kube/config.d/k8s-prod-4:k8s-prod-4"
+            "KUBECONFIG_K8S_DEV_BASE64:${HOME}/.kube/config.d/k8s-dev:k8s-dev",
+            "KUBECONFIG_K8S_PG_BASE64:${HOME}/.kube/config.d/k8s-pg:k8s-pg",
+            "KUBECONFIG_K8S_PROD_1_BASE64:${HOME}/.kube/config.d/k8s-prod-1:k8s-prod-1",
+            "KUBECONFIG_K8S_PROD_2_BASE64:${HOME}/.kube/config.d/k8s-prod-2:k8s-prod-2",
+            "KUBECONFIG_K8S_PROD_3_BASE64:${HOME}/.kube/config.d/k8s-prod-3:k8s-prod-3",
+            "KUBECONFIG_K8S_PROD_4_BASE64:${HOME}/.kube/config.d/k8s-prod-4:k8s-prod-4"
           )
           for spec in "${specs[@]}"; do
             IFS=: read -r var f ctx <<<"$spec"
