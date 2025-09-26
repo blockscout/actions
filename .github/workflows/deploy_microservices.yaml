@@ -152,12 +152,12 @@ jobs:
 
           files=()
           specs=(
-            "KUBECONFIG_K8S_DEV_BASE64:~/.kube/config.d/k8s-dev:k8s-dev"
-            # "KUBECONFIG_K8S_PG_BASE64:~/.kube/config.d/k8s-pg:k8s-pg"
-            # "KUBECONFIG_K8S_PROD_1_BASE64:~/.kube/config.d/k8s-prod-1:k8s-prod-1"
-            # "KUBECONFIG_K8S_PROD_2_BASE64:~/.kube/config.d/k8s-prod-2:k8s-prod-2"
-            # "KUBECONFIG_K8S_PROD_3_BASE64:~/.kube/config.d/k8s-prod-3:k8s-prod-3"
-            # "KUBECONFIG_K8S_PROD_4_BASE64:~/.kube/config.d/k8s-prod-4:k8s-prod-4"
+            "KUBECONFIG_K8S_DEV_BASE64:${HOME}/.kube/config.d/k8s-dev:k8s-dev"
+            # "KUBECONFIG_K8S_PG_BASE64:${HOME}/.kube/config.d/k8s-pg:k8s-pg"
+            # "KUBECONFIG_K8S_PROD_1_BASE64:${HOME}/.kube/config.d/k8s-prod-1:k8s-prod-1"
+            # "KUBECONFIG_K8S_PROD_2_BASE64:${HOME}/.kube/config.d/k8s-prod-2:k8s-prod-2"
+            # "KUBECONFIG_K8S_PROD_3_BASE64:${HOME}/.kube/config.d/k8s-prod-3:k8s-prod-3"
+            # "KUBECONFIG_K8S_PROD_4_BASE64:${HOME}/.kube/config.d/k8s-prod-4:k8s-prod-4"
           )
           for spec in "${specs[@]}"; do
             IFS=: read -r var f ctx <<<"$spec"
@@ -177,6 +177,9 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x helmfile/update-microservices.sh
+          echo "KUBECONFIG=$KUBECONFIG"
+          ls -l ${HOME}/.kube/config.d || true
+          kubectl --kubeconfig "${HOME}/.kube/config.d/k8s-dev" config get-contexts -o name
           ACTION="${{ inputs.action }}"
           if [[ -z "${SERVICES_CSV:-}" ]]; then
             echo "Deploying all microservices"
