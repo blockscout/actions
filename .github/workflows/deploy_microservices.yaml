@@ -102,6 +102,19 @@ jobs:
             echo "Exported kubeconfig for ${CLUSTER_NAME} as ${ENV_VAR_NAME}"
           done <<< "$CLUSTER_DATA"
 
+      - name: Get Vault token
+        id: vault-token
+        uses: blockscout/actions/.github/actions/vault@main
+        with:
+          url: https://vault.k8s.blockscout.com
+          method: jwt
+          role: ci-prod
+          path: github-jwt
+          jwtGithubAudience: "https://github.com/blockscout"
+          tlsSkipVerify: "false"
+          exportToken: "true"
+          secrets: ""
+
       - name: Prepare kubeconfigs and contexts
         shell: bash
         run: |
@@ -155,6 +168,8 @@ jobs:
 
       - name: Run update-microservices.sh
         shell: bash
+        env:
+          VAULT_TOKEN: ${{ steps.vault-token.outputs.token }}
         run: |
           set -euo pipefail
           chmod +x helmfile/update-microservices.sh
