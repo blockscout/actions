@@ -168,13 +168,19 @@ jobs:
 
       - name: Run update-microservices.sh
         shell: bash
-        env:
-          VAULT_TOKEN: ${{ steps.vault-token.outputs.token }}
         run: |
           set -euo pipefail
           chmod +x helmfile/update-microservices.sh
           echo "KUBECONFIG=$KUBECONFIG"
           ls -l ${HOME}/.kube/config.d || true
+          
+          # Verify VAULT_TOKEN is available
+          if [[ -z "${VAULT_TOKEN:-}" ]]; then
+            echo "VAULT_TOKEN is not set!" >&2
+            exit 1
+          fi
+          echo "VAULT_TOKEN is available"
+          
           ACTION="${{ inputs.action }}"
 
           # Dynamically determine available clusters by checking per-cluster kubeconfig files
