@@ -48,37 +48,59 @@ jobs:
           wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}
           chmod +x /usr/local/bin/yq
 
-      - name: Get Vault dev kubeconfig
-        id: vault-dev
-        uses: blockscout/actions/.github/actions/vault@main
-        with:
-          url: https://vault.k8s.blockscout.com
-          method: jwt
-          role: ci-dev
-          path: github-jwt
-          jwtGithubAudience: "https://github.com/blockscout"
-          tlsSkipVerify: "false"
-          exportToken: "true"
-          secrets: |
-            ci/data/dev/kubeconfig/k8s-dev kubeconfig | KUBECONFIG_K8S_DEV_BASE64 ;
-
-      - name: Get Vault prod kubeconfigs
-        id: vault-prod
-        uses: blockscout/actions/.github/actions/vault@main
-        with:
-          url: https://vault.k8s.blockscout.com
-          method: jwt
-          role: ci-prod
-          path: github-jwt
-          jwtGithubAudience: "https://github.com/blockscout"
-          tlsSkipVerify: "false"
-          exportToken: "true"
-          secrets: |
-            ci/data/prod/kubeconfig/k8s-pg kubeconfig | KUBECONFIG_K8S_PG_BASE64 ;
-            ci/data/prod/kubeconfig/k8s-prod-1 kubeconfig | KUBECONFIG_K8S_PROD_1_BASE64 ;
-            ci/data/prod/kubeconfig/k8s-prod-2 kubeconfig | KUBECONFIG_K8S_PROD_2_BASE64 ;
-            ci/data/prod/kubeconfig/k8s-prod-3 kubeconfig | KUBECONFIG_K8S_PROD_3_BASE64 ;
-          # ci/data/prod/kubeconfig/k8s-prod-4 kubeconfig | KUBECONFIG_K8S_PROD_4_BASE64 ;
+      - name: Get kubeconfigs from Rancher
+        shell: bash
+        env:
+          RANCHER_URL: ${{ secrets.RANCHER_URL }}
+          RANCHER_USERNAME: ${{ secrets.RANCHER_CI_PROD_USERNAME }}
+          RANCHER_PASSWORD: ${{ secrets.RANCHER_CI_PROD_PASSWORD }}
+        run: |
+          set -euo pipefail
+          
+          # Login to Rancher and get token
+          echo "Authenticating to Rancher..."
+          LOGIN_RESPONSE=$(curl -sk -X POST "${RANCHER_URL}/v3-public/localProviders/local?action=login" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"${RANCHER_USERNAME}\",\"password\":\"${RANCHER_PASSWORD}\"}")
+          
+          TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.token')
+          if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+            echo "Failed to authenticate to Rancher" >&2
+            exit 1
+          fi
+          
+          echo "Successfully authenticated to Rancher"
+          
+          # Get list of all clusters
+          CLUSTERS_RESPONSE=$(curl -sk -X GET "${RANCHER_URL}/v3/clusters" \
+            -H "Authorization: Bearer ${TOKEN}")
+          
+          # Extract cluster IDs and names
+          CLUSTER_DATA=$(echo "$CLUSTERS_RESPONSE" | jq -r '.data[] | "\(.id):\(.name)"')
+          
+          # For each cluster, get kubeconfig
+          while IFS=: read -r CLUSTER_ID CLUSTER_NAME; do
+            echo "Fetching kubeconfig for cluster: ${CLUSTER_NAME} (${CLUSTER_ID})"
+            
+            KUBECONFIG_RESPONSE=$(curl -sk -X POST "${RANCHER_URL}/v3/clusters/${CLUSTER_ID}?action=generateKubeconfig" \
+              -H "Authorization: Bearer ${TOKEN}")
+            
+            KUBECONFIG_CONTENT=$(echo "$KUBECONFIG_RESPONSE" | jq -r '.config')
+            
+            if [[ -z "$KUBECONFIG_CONTENT" || "$KUBECONFIG_CONTENT" == "null" ]]; then
+              echo "Warning: Failed to get kubeconfig for cluster ${CLUSTER_NAME}" >&2
+              continue
+            fi
+            
+            # Base64 encode and export to environment
+            KUBECONFIG_BASE64=$(echo "$KUBECONFIG_CONTENT" | base64 -w 0)
+            
+            # Normalize cluster name for environment variable
+            ENV_VAR_NAME=$(echo "KUBECONFIG_${CLUSTER_NAME}_BASE64" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+            
+            echo "${ENV_VAR_NAME}=${KUBECONFIG_BASE64}" >> "$GITHUB_ENV"
+            echo "Exported kubeconfig for ${CLUSTER_NAME} as ${ENV_VAR_NAME}"
+          done <<< "$CLUSTER_DATA"
 
       - name: Prepare kubeconfigs and contexts
         shell: bash
@@ -109,29 +131,30 @@ jobs:
           }
 
           files=()
-          specs=(
-            "KUBECONFIG_K8S_DEV_BASE64:${HOME}/.kube/config.d/k8s-dev:k8s-dev",
-            "KUBECONFIG_K8S_PG_BASE64:${HOME}/.kube/config.d/k8s-pg:k8s-pg",
-            "KUBECONFIG_K8S_PROD_1_BASE64:${HOME}/.kube/config.d/k8s-prod-1:k8s-prod-1",
-            "KUBECONFIG_K8S_PROD_2_BASE64:${HOME}/.kube/config.d/k8s-prod-2:k8s-prod-2",
-            "KUBECONFIG_K8S_PROD_3_BASE64:${HOME}/.kube/config.d/k8s-prod-3:k8s-prod-3"
-            #"KUBECONFIG_K8S_PROD_4_BASE64:${HOME}/.kube/config.d/k8s-prod-4:k8s-prod-4"
-          )
-          for spec in "${specs[@]}"; do
-            IFS=: read -r var f ctx <<<"$spec"
-            out=$(write_cfg "$var" "$f" "$ctx" || true)
-            [[ -n "${out}" ]] && files+=("$f")
+          
+          # Dynamically find all KUBECONFIG_*_BASE64 environment variables
+          for var in $(env | grep -E '^KUBECONFIG_.*_BASE64=' | cut -d= -f1); do
+            # Extract cluster name from variable name
+            # KUBECONFIG_K8S_DEV_BASE64 -> k8s-dev
+            CLUSTER_NAME=$(echo "$var" | sed 's/^KUBECONFIG_//' | sed 's/_BASE64$//' | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+            
+            FILE_PATH="${HOME}/.kube/config.d/${CLUSTER_NAME}"
+            
+            echo "Processing cluster: ${CLUSTER_NAME} from variable: ${var}"
+            out=$(write_cfg "$var" "$FILE_PATH" "$CLUSTER_NAME" || true)
+            [[ -n "${out}" ]] && files+=("$FILE_PATH")
           done
 
           if [[ ${#files[@]} -gt 0 ]]; then
             KUBECONFIG=$(IFS=: ; echo "${files[*]}")
             echo "KUBECONFIG=$KUBECONFIG" >> "$GITHUB_ENV"
+            echo "Prepared ${#files[@]} kubeconfig(s)"
+          else
+            echo "Warning: No kubeconfig files were prepared" >&2
           fi
 
       - name: Run update-microservices.sh
         shell: bash
-        env:
-          VAULT_TOKEN: ${{ env.VAULT_TOKEN }}
         run: |
           set -euo pipefail
           chmod +x helmfile/update-microservices.sh
@@ -139,17 +162,21 @@ jobs:
           ls -l ${HOME}/.kube/config.d || true
           ACTION="${{ inputs.action }}"
 
-          # Determine available clusters by checking per-cluster kubeconfig files
-          declare -a CLUSTERS=(k8s-dev k8s-pg k8s-prod-1 k8s-prod-2 k8s-prod-3 k8s-prod-4)
+          # Dynamically determine available clusters by checking per-cluster kubeconfig files
           declare -a SELECTED=()
-          for c in "${CLUSTERS[@]}"; do
-            f="${HOME}/.kube/config.d/${c}"
-            [[ -s "$f" ]] && SELECTED+=("$c")
+          for f in "${HOME}/.kube/config.d/"*; do
+            if [[ -s "$f" ]]; then
+              cluster_name=$(basename "$f")
+              SELECTED+=("$cluster_name")
+            fi
           done
+          
           if [[ ${#SELECTED[@]} -eq 0 ]]; then
             echo "No per-cluster kubeconfig files found in ${HOME}/.kube/config.d" >&2
             exit 1
           fi
+          
+          echo "Found ${#SELECTED[@]} cluster(s): ${SELECTED[*]}"
 
           # Run sequentially per context, setting KUBECONFIG to the cluster-specific file
           for ctx in "${SELECTED[@]}"; do
