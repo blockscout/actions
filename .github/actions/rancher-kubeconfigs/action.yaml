@@ -1,0 +1,93 @@
+name: "Rancher Kubeconfigs"
+description: "Authenticate to Rancher and export kubeconfigs for all available clusters"
+inputs:
+  url:
+    description: "Rancher URL, e.g. https://rancher.example.com"
+    required: true
+  username:
+    description: "Rancher username for authentication"
+    required: true
+  password:
+    description: "Rancher password for authentication"
+    required: true
+  tlsSkipVerify:
+    description: "Skip TLS verification (true/false)"
+    required: false
+    default: "true"
+runs:
+  using: "composite"
+  steps:
+    - name: Get kubeconfigs from Rancher
+      shell: bash
+      env:
+        RANCHER_URL: ${{ inputs.url }}
+        RANCHER_USERNAME: ${{ inputs.username }}
+        RANCHER_PASSWORD: ${{ inputs.password }}
+        TLS_SKIP_VERIFY: ${{ inputs.tlsSkipVerify }}
+      run: |
+        set -euo pipefail
+        
+        # Build curl flags
+        CURL_FLAGS="-sS"
+        if [[ "${TLS_SKIP_VERIFY}" == "true" ]]; then
+          CURL_FLAGS="${CURL_FLAGS} -k"
+        fi
+        
+        # Login to Rancher and get token
+        echo "Authenticating to Rancher as ${RANCHER_USERNAME}..."
+        LOGIN_RESPONSE=$(curl ${CURL_FLAGS} -X POST "${RANCHER_URL}/v3-public/localProviders/local?action=login" \
+          -H 'Content-Type: application/json' \
+          -d "{\"username\":\"${RANCHER_USERNAME}\",\"password\":\"${RANCHER_PASSWORD}\"}")
+        
+        TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.token')
+        if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+          echo "Failed to authenticate to Rancher" >&2
+          echo "Response: ${LOGIN_RESPONSE}" >&2
+          exit 1
+        fi
+        
+        echo "Successfully authenticated to Rancher"
+        
+        # Get list of all clusters
+        CLUSTERS_RESPONSE=$(curl ${CURL_FLAGS} -X GET "${RANCHER_URL}/v3/clusters" \
+          -H "Authorization: Bearer ${TOKEN}")
+        
+        # Extract cluster IDs and names
+        CLUSTER_DATA=$(echo "$CLUSTERS_RESPONSE" | jq -r '.data[] | "\(.id):\(.name)"')
+        
+        if [[ -z "$CLUSTER_DATA" ]]; then
+          echo "Warning: No clusters found for user ${RANCHER_USERNAME}" >&2
+          exit 0
+        fi
+        
+        # For each cluster, get kubeconfig
+        CLUSTER_COUNT=0
+        while IFS=: read -r CLUSTER_ID CLUSTER_NAME; do
+          [[ -z "$CLUSTER_ID" || -z "$CLUSTER_NAME" ]] && continue
+          
+          echo "Fetching kubeconfig for cluster: ${CLUSTER_NAME} (${CLUSTER_ID})"
+          
+          KUBECONFIG_RESPONSE=$(curl ${CURL_FLAGS} -X POST "${RANCHER_URL}/v3/clusters/${CLUSTER_ID}?action=generateKubeconfig" \
+            -H "Authorization: Bearer ${TOKEN}")
+          
+          KUBECONFIG_CONTENT=$(echo "$KUBECONFIG_RESPONSE" | jq -r '.config')
+          
+          if [[ -z "$KUBECONFIG_CONTENT" || "$KUBECONFIG_CONTENT" == "null" ]]; then
+            echo "Warning: Failed to get kubeconfig for cluster ${CLUSTER_NAME}" >&2
+            continue
+          fi
+          
+          # Base64 encode and export to environment
+          KUBECONFIG_BASE64=$(echo "$KUBECONFIG_CONTENT" | base64 -w 0)
+          
+          # Normalize cluster name for environment variable
+          ENV_VAR_NAME=$(echo "KUBECONFIG_${CLUSTER_NAME}_BASE64" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+          
+          echo "${ENV_VAR_NAME}=${KUBECONFIG_BASE64}" >> "$GITHUB_ENV"
+          echo "Exported kubeconfig for ${CLUSTER_NAME} as ${ENV_VAR_NAME}"
+          
+          CLUSTER_COUNT=$((CLUSTER_COUNT + 1))
+        done <<< "$CLUSTER_DATA"
+        
+        echo "Successfully exported ${CLUSTER_COUNT} kubeconfig(s)"
+

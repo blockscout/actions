@@ -48,59 +48,19 @@ jobs:
           wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}
           chmod +x /usr/local/bin/yq
 
-      - name: Get kubeconfigs from Rancher
-        shell: bash
-        env:
-          RANCHER_URL: ${{ secrets.RANCHER_URL }}
-          RANCHER_USERNAME: ${{ secrets.RANCHER_CI_PROD_USERNAME }}
-          RANCHER_PASSWORD: ${{ secrets.RANCHER_CI_PROD_PASSWORD }}
-        run: |
-          set -euo pipefail
-          
-          # Login to Rancher and get token
-          echo "Authenticating to Rancher..."
-          LOGIN_RESPONSE=$(curl -sk -X POST "${RANCHER_URL}/v3-public/localProviders/local?action=login" \
-            -H 'Content-Type: application/json' \
-            -d "{\"username\":\"${RANCHER_USERNAME}\",\"password\":\"${RANCHER_PASSWORD}\"}")
-          
-          TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.token')
-          if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
-            echo "Failed to authenticate to Rancher" >&2
-            exit 1
-          fi
-          
-          echo "Successfully authenticated to Rancher"
-          
-          # Get list of all clusters
-          CLUSTERS_RESPONSE=$(curl -sk -X GET "${RANCHER_URL}/v3/clusters" \
-            -H "Authorization: Bearer ${TOKEN}")
-          
-          # Extract cluster IDs and names
-          CLUSTER_DATA=$(echo "$CLUSTERS_RESPONSE" | jq -r '.data[] | "\(.id):\(.name)"')
-          
-          # For each cluster, get kubeconfig
-          while IFS=: read -r CLUSTER_ID CLUSTER_NAME; do
-            echo "Fetching kubeconfig for cluster: ${CLUSTER_NAME} (${CLUSTER_ID})"
-            
-            KUBECONFIG_RESPONSE=$(curl -sk -X POST "${RANCHER_URL}/v3/clusters/${CLUSTER_ID}?action=generateKubeconfig" \
-              -H "Authorization: Bearer ${TOKEN}")
-            
-            KUBECONFIG_CONTENT=$(echo "$KUBECONFIG_RESPONSE" | jq -r '.config')
-            
-            if [[ -z "$KUBECONFIG_CONTENT" || "$KUBECONFIG_CONTENT" == "null" ]]; then
-              echo "Warning: Failed to get kubeconfig for cluster ${CLUSTER_NAME}" >&2
-              continue
-            fi
-            
-            # Base64 encode and export to environment
-            KUBECONFIG_BASE64=$(echo "$KUBECONFIG_CONTENT" | base64 -w 0)
-            
-            # Normalize cluster name for environment variable
-            ENV_VAR_NAME=$(echo "KUBECONFIG_${CLUSTER_NAME}_BASE64" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-            
-            echo "${ENV_VAR_NAME}=${KUBECONFIG_BASE64}" >> "$GITHUB_ENV"
-            echo "Exported kubeconfig for ${CLUSTER_NAME} as ${ENV_VAR_NAME}"
-          done <<< "$CLUSTER_DATA"
+      - name: Get dev kubeconfigs from Rancher
+        uses: blockscout/actions/.github/actions/rancher-kubeconfigs@main
+        with:
+          url: ${{ secrets.RANCHER_URL }}
+          username: ${{ secrets.RANCHER_CI_DEV_USERNAME }}
+          password: ${{ secrets.RANCHER_CI_DEV_PASSWORD }}
+
+      - name: Get prod kubeconfigs from Rancher
+        uses: blockscout/actions/.github/actions/rancher-kubeconfigs@main
+        with:
+          url: ${{ secrets.RANCHER_URL }}
+          username: ${{ secrets.RANCHER_CI_PROD_USERNAME }}
+          password: ${{ secrets.RANCHER_CI_PROD_PASSWORD }}
 
       - name: Get Vault token
         id: vault-token
