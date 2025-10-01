@@ -10,6 +10,10 @@ inputs:
   password:
     description: "Rancher password for authentication"
     required: true
+  clusterNames:
+    description: "Comma or space separated list of cluster names. Leave empty to fetch all clusters. Example: 'k8s-dev' or 'k8s-pg,k8s-prod-1,k8s-prod-2'"
+    required: false
+    default: ""
   tlsSkipVerify:
     description: "Skip TLS verification (true/false)"
     required: false
@@ -23,6 +27,7 @@ runs:
         RANCHER_URL: ${{ inputs.url }}
         RANCHER_USERNAME: ${{ inputs.username }}
         RANCHER_PASSWORD: ${{ inputs.password }}
+        CLUSTER_NAMES: ${{ inputs.clusterNames }}
         TLS_SKIP_VERIFY: ${{ inputs.tlsSkipVerify }}
       run: |
         set -euo pipefail
@@ -60,10 +65,36 @@ runs:
           exit 0
         fi
         
+        # Parse cluster names filter (comma or space separated)
+        declare -a ALLOWED_CLUSTERS=()
+        if [[ -n "${CLUSTER_NAMES}" ]]; then
+          # Replace commas with spaces and split into array
+          CLUSTER_NAMES_NORMALIZED=$(echo "${CLUSTER_NAMES}" | tr ',' ' ')
+          read -ra ALLOWED_CLUSTERS <<< "$CLUSTER_NAMES_NORMALIZED"
+          echo "Cluster filter: ${ALLOWED_CLUSTERS[*]}"
+        else
+          echo "No cluster filter - will fetch all available clusters"
+        fi
+        
         # For each cluster, get kubeconfig
         CLUSTER_COUNT=0
         while IFS=: read -r CLUSTER_ID CLUSTER_NAME; do
           [[ -z "$CLUSTER_ID" || -z "$CLUSTER_NAME" ]] && continue
+          
+          # Apply cluster name filter if specified
+          if [[ ${#ALLOWED_CLUSTERS[@]} -gt 0 ]]; then
+            FOUND=false
+            for allowed in "${ALLOWED_CLUSTERS[@]}"; do
+              if [[ "$CLUSTER_NAME" == "$allowed" ]]; then
+                FOUND=true
+                break
+              fi
+            done
+            if [[ "$FOUND" != "true" ]]; then
+              echo "Skipping cluster ${CLUSTER_NAME} (not in allowed list)"
+              continue
+            fi
+          fi
           
           echo "Fetching kubeconfig for cluster: ${CLUSTER_NAME} (${CLUSTER_ID})"
           

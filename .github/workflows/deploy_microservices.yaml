@@ -54,6 +54,7 @@ jobs:
           url: ${{ secrets.RANCHER_URL }}
           username: ${{ secrets.RANCHER_CI_DEV_USERNAME }}
           password: ${{ secrets.RANCHER_CI_DEV_PASSWORD }}
+          clusterNames: "k8s-dev"
 
       - name: Get prod kubeconfigs from Rancher
         uses: blockscout/actions/.github/actions/rancher-kubeconfigs@main
@@ -61,6 +62,7 @@ jobs:
           url: ${{ secrets.RANCHER_URL }}
           username: ${{ secrets.RANCHER_CI_PROD_USERNAME }}
           password: ${{ secrets.RANCHER_CI_PROD_PASSWORD }}
+          clusterNames: "k8s-pg,k8s-prod-1,k8s-prod-2,k8s-prod-3,k8s-prod-4"
 
       - name: Get Vault token
         id: vault-token
