@@ -46,7 +46,7 @@ runs:
         mkdir -p ~/.ssh
         echo "${{ inputs.docker-arm-host-key }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        apt update && apt install curl -y
+        apt update && apt install curl openssh-client -y
         curl -o $PWD/select-remote-builder.sh https://raw.githubusercontent.com/blockscout/actions/refs/heads/main/scripts/select-remote-builder.sh
         chmod +x $PWD/select-remote-builder.sh
     - name: Find builder
