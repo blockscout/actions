@@ -114,6 +114,9 @@ runs:
           # Normalize cluster name for environment variable
           ENV_VAR_NAME=$(echo "KUBECONFIG_${CLUSTER_NAME}_BASE64" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
           
+          # Prevent kubeconfig leak in subsequent logs
+          echo "::add-mask::${KUBECONFIG_BASE64}"
+
           echo "${ENV_VAR_NAME}=${KUBECONFIG_BASE64}" >> "$GITHUB_ENV"
           echo "Exported kubeconfig for ${CLUSTER_NAME} as ${ENV_VAR_NAME}"
           
