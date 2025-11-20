@@ -186,6 +186,14 @@ jobs:
             if [[ $EXIT_CODE -ne 0 ]]; then
               echo "Deployment script failed for ${ctx} with exit code ${EXIT_CODE}" >&2
             fi
+            
+            # Debug info
+            if [[ -f "$DEPLOY_FAILURES_FILE" ]]; then
+               CURRENT_COUNT=$(wc -l < "$DEPLOY_FAILURES_FILE")
+               echo "DEBUG: Current failures count: ${CURRENT_COUNT}"
+            else
+               echo "DEBUG: Failure file not found!"
+            fi
           done
 
           # Check if any deployments failed and report all of them
