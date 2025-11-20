@@ -147,6 +147,8 @@ jobs:
 
           DEPLOY_FAILURES_FILE=$(mktemp)
           export DEPLOY_FAILURES_FILE
+          echo "DEBUG: Created failures file: $DEPLOY_FAILURES_FILE"
+          ls -la "$DEPLOY_FAILURES_FILE"
 
           # Dynamically determine available clusters by checking per-cluster kubeconfig files
           declare -a SELECTED=()
