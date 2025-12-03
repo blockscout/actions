@@ -41,7 +41,7 @@ jobs:
             aarch64|arm64) ARCH=arm64 ;;
             *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
           esac
-          curl -sSLo helmfile.tgz https://github.com/helmfile/helmfile/releases/download/v1.1.0/helmfile_1.1.0_linux_${ARCH}.tar.gz
+          curl -sSLo helmfile.tgz https://github.com/helmfile/helmfile/releases/download/v1.2.2/helmfile_1.2.2_linux_${ARCH}.tar.gz
           tar -xzvf helmfile.tgz
           mv helmfile /usr/local/bin/helmfile
           chmod +x /usr/local/bin/helmfile
