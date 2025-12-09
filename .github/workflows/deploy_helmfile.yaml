@@ -69,8 +69,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          helm plugin install https://github.com/jkroepke/helm-secrets --verify=false
-          helm plugin install https://github.com/databus23/helm-diff --verify=false
+          helm plugin install https://github.com/jkroepke/helm-secrets
+          helm plugin install https://github.com/databus23/helm-diff
           cd /tmp
           ARCH=$(uname -m)
           case "$ARCH" in
