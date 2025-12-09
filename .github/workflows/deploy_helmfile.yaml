@@ -64,13 +64,30 @@ jobs:
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v4
 
-      # Install helm, helm-secrets, sops
       - name: Install tools
         shell: bash
         run: |
           set -euo pipefail
-          helm plugin install https://github.com/jkroepke/helm-secrets
-          helm plugin install https://github.com/databus23/helm-diff
+          
+          retry() {
+            local max_attempts=5
+            local delay=10
+            local attempt=1
+            while [ $attempt -le $max_attempts ]; do
+              if "$@"; then
+                return 0
+              fi
+              echo "Attempt $attempt/$max_attempts failed. Retrying in ${delay}s..."
+              sleep $delay
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+            echo "All $max_attempts attempts failed"
+            return 1
+          }
+          
+          retry helm plugin install https://github.com/jkroepke/helm-secrets
+          retry helm plugin install https://github.com/databus23/helm-diff
           cd /tmp
           ARCH=$(uname -m)
           case "$ARCH" in
@@ -78,11 +95,11 @@ jobs:
             aarch64|arm64) ARCH=arm64 ;;
             *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
           esac
-          curl -sSLo helmfile.tgz https://github.com/helmfile/helmfile/releases/download/v1.2.2/helmfile_1.2.2_linux_${ARCH}.tar.gz
+          retry curl -sSLo helmfile.tgz https://github.com/helmfile/helmfile/releases/download/v1.2.2/helmfile_1.2.2_linux_${ARCH}.tar.gz
           tar -xzvf helmfile.tgz
           mv helmfile /usr/local/bin/helmfile
           chmod +x /usr/local/bin/helmfile
-          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}
+          retry wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}
           chmod +x /usr/local/bin/yq
 
       - name: Get Vault credentials
