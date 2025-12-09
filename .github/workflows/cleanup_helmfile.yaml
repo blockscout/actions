@@ -38,6 +38,11 @@ on:
         required: false
         default: 'ubuntu-latest'
         type: string
+      containerImage:
+        description: 'Container image to use for the job'
+        required: false
+        default: 'dtzar/helm-kubectl:3.19.1'
+        type: string
   workflow_call:
     inputs:
       appName:
@@ -72,6 +77,11 @@ on:
       runs-on:
         description: 'Runner label to use for the job'
         required: false
+        default: 'ubuntu-latest'
+        type: string
+      containerImage:
+        description: 'Container image to use for the job'
+        required: false
         default: 'dtzar/helm-kubectl:3.19.1'
         type: string
 
@@ -82,6 +92,8 @@ jobs:
       id-token: write
       contents: read
     runs-on: ${{ inputs.runs-on }}
+    container:
+      image: ${{ inputs.containerImage }}
     strategy:
       fail-fast: true
       max-parallel: 1
