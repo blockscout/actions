@@ -41,6 +41,11 @@ on:
       runs-on:
         description: 'Runner label to use for the job'
         required: false
+        default: 'ubuntu-latest'
+        type: string
+      containerImage:
+        description: 'Container image to use for the job'
+        required: false
         default: 'dtzar/helm-kubectl:3.19.1'
         type: string
 
@@ -49,6 +54,8 @@ jobs:
     name: Deploy
     permissions: write-all
     runs-on: ${{ inputs.runs-on }}
+    container:
+      image: ${{ inputs.containerImage }}
     timeout-minutes: 60
     steps:
       - name: Check out the repo
