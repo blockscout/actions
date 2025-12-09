@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ~/.kube
-          echo $KUBECONFIG_BASE64 | base64 --decode > ~/.kube/config
+          echo $KUBECONFIG_BASE64 | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
           cd ${{ inputs.helmfileDir }}
           helmfile -e ${{ inputs.globalEnv }} -l app=${{ inputs.appName }} write-values --output-file-template "helmfile/bs-stack.yaml"
@@ -126,7 +126,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ~/.kube
-          echo $KUBECONFIG_BASE64 | base64 --decode > ~/.kube/config
+          echo $KUBECONFIG_BASE64 | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
           cd ${{ inputs.helmfileDir }}
           helmfile -e ${{ inputs.globalEnv }} -l app=${{ inputs.appName }} ${{ inputs.helmfileCommand }} ${{ inputs.helmfileParameters }}
