@@ -142,16 +142,6 @@ jobs:
             exit 1
           fi
           echo "VAULT_TOKEN is available (length: ${#VAULT_TOKEN})"
-
-          echo "Testing access to sys/internal/ui/mounts used by vals..."
-          MOUNTS_CODE=$(curl -sS -o /tmp/vault-mounts.json -w "%{http_code}" \
-            -H "X-Vault-Token: $VAULT_TOKEN" \
-            "https://vault.k8s.blockscout.com/v1/sys/internal/ui/mounts/deployment-values/whitelist/cors-dynamic" || true)
-          echo "sys/internal/ui/mounts HTTP status: ${MOUNTS_CODE}"
-          if [[ "${MOUNTS_CODE}" != "200" ]]; then
-            echo "Body (first 200 lines):"
-            sed -n '1,200p' /tmp/vault-mounts.json || true
-          fi
           
           ACTION="${{ inputs.action }}"
 
