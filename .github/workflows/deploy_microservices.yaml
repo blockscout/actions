@@ -143,16 +143,6 @@ jobs:
           fi
           echo "VAULT_TOKEN is available (length: ${#VAULT_TOKEN})"
           
-          # Test token validity with Vault
-          echo "Testing VAULT_TOKEN validity..."
-          TOKEN_INFO=$(curl -sS -H "X-Vault-Token: $VAULT_TOKEN" https://vault.k8s.blockscout.com/v1/auth/token/lookup-self 2>&1) || true
-          if echo "$TOKEN_INFO" | grep -q '"errors"'; then
-            echo "VAULT_TOKEN validation failed:"
-            echo "$TOKEN_INFO" | head -20
-            exit 1
-          fi
-          echo "VAULT_TOKEN is valid. Policies: $(echo "$TOKEN_INFO" | grep -o '"policies":\[[^]]*\]' || echo 'unknown')"
-          
           ACTION="${{ inputs.action }}"
 
           DEPLOY_FAILURES_FILE=$(mktemp)
