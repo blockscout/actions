@@ -136,12 +136,22 @@ jobs:
           echo "KUBECONFIG=$KUBECONFIG"
           ls -l ${HOME}/.kube/config.d || true
           
-          # Verify VAULT_TOKEN is available
+          # Verify VAULT_TOKEN is available and valid
           if [[ -z "${VAULT_TOKEN:-}" ]]; then
             echo "VAULT_TOKEN is not set!" >&2
             exit 1
           fi
-          echo "VAULT_TOKEN is available"
+          echo "VAULT_TOKEN is available (length: ${#VAULT_TOKEN})"
+          
+          # Test token validity with Vault
+          echo "Testing VAULT_TOKEN validity..."
+          TOKEN_INFO=$(curl -sS -H "X-Vault-Token: $VAULT_TOKEN" https://vault.k8s.blockscout.com/v1/auth/token/lookup-self 2>&1) || true
+          if echo "$TOKEN_INFO" | grep -q '"errors"'; then
+            echo "VAULT_TOKEN validation failed:"
+            echo "$TOKEN_INFO" | head -20
+            exit 1
+          fi
+          echo "VAULT_TOKEN is valid. Policies: $(echo "$TOKEN_INFO" | grep -o '"policies":\[[^]]*\]' || echo 'unknown')"
           
           ACTION="${{ inputs.action }}"
 
