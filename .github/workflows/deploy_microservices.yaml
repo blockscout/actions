@@ -18,7 +18,7 @@ jobs:
     name: Deploy
     runs-on: [github-k8s-dev-runner]
     container:
-      image: dtzar/helm-kubectl:4.0
+      image: dtzar/helm-kubectl:4.0.1
     permissions:
       contents: read
       id-token: write
