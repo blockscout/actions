@@ -23,10 +23,12 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Checkout
-        uses: blockscout/actions/.github/actions/checkout@main
-        with:
-          fetch-depth: "1"
+      # - name: Checkout
+      #   uses: blockscout/actions/.github/actions/checkout@main
+      #   with:
+      #     fetch-depth: "1"
+      - name: Check out the repo
+        uses: actions/checkout@v3
 
       - name: Install tools
         shell: bash
@@ -64,17 +66,28 @@ jobs:
           password: ${{ secrets.RANCHER_CI_PROD_PASSWORD }}
           clusterNames: "k8s-pg,k8s-prod-1,k8s-prod-2,k8s-prod-3,k8s-prod-4"
 
-      - name: Get Vault token
-        id: vault-token
-        uses: blockscout/actions/.github/actions/vault@main
+      # - name: Get Vault token
+      #   id: vault-token
+      #   uses: blockscout/actions/.github/actions/vault@main
+      #   with:
+      #     url: https://vault.k8s.blockscout.com
+      #     method: jwt
+      #     role: ci-prod
+      #     path: github-jwt
+      #     jwtGithubAudience: "https://github.com/blockscout"
+      #     tlsSkipVerify: "false"
+      #     exportToken: "true"
+      #     secrets: ""
+      - name: Get Vault credentials
+        id: retrieve-vault-secrets
+        uses: hashicorp/vault-action@v2.4.1
         with:
           url: https://vault.k8s.blockscout.com
-          method: jwt
           role: ci-prod
           path: github-jwt
-          jwtGithubAudience: "https://github.com/blockscout"
-          tlsSkipVerify: "false"
-          exportToken: "true"
+          method: jwt
+          tlsSkipVerify: false
+          exportToken: true
           secrets: ""
 
       - name: Prepare kubeconfigs and contexts
