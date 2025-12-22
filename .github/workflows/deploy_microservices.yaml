@@ -28,7 +28,7 @@ jobs:
       #   with:
       #     fetch-depth: "1"
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install tools
         shell: bash
@@ -80,7 +80,7 @@ jobs:
       #     secrets: ""
       - name: Get Vault credentials
         id: retrieve-vault-secrets
-        uses: hashicorp/vault-action@v2.4.1
+        uses: hashicorp/vault-action@v3.4.0
         with:
           url: https://vault.k8s.blockscout.com
           role: ci-prod
@@ -88,6 +88,7 @@ jobs:
           method: jwt
           tlsSkipVerify: false
           exportToken: true
+          jwtTtl: 3600
           secrets: ""
 
       - name: Prepare kubeconfigs and contexts
