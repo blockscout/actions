@@ -104,7 +104,7 @@ jobs:
 
       - name: Get Vault credentials
         id: retrieve-vault-secrets
-        uses: hashicorp/vault-action@v2.4.1
+        uses: hashicorp/vault-action@v3.4.0
         with:
           url: https://vault.k8s.blockscout.com
           role: ${{ inputs.vaultRole }}
