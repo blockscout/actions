@@ -146,7 +146,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x helmfile/update-microservices.sh
+          chmod +x update-microservices.sh
           echo "KUBECONFIG=$KUBECONFIG"
           ls -l ${HOME}/.kube/config.d || true
           
@@ -185,7 +185,7 @@ jobs:
           for ctx in "${SELECTED[@]}"; do
             echo "=== Running for context: ${ctx} ==="
             export KUBECONFIG="${HOME}/.kube/config.d/${ctx}"
-            CMD=(./helmfile/update-microservices.sh "$ACTION" --clusters "$ctx")
+            CMD=(./update-microservices.sh "$ACTION" --clusters "$ctx")
             if [[ -z "${SERVICES_CSV:-}" ]]; then
               echo "Deploying all microservices in ${ctx}"
             else
