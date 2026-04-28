@@ -43,6 +43,10 @@ on:
         required: false
         default: 'dtzar/helm-kubectl:3.19.1'
         type: string
+      namespace:
+        description: 'Namespace to delete. Defaults to globalEnv for backward compatibility.'
+        required: false
+        type: string
   workflow_call:
     inputs:
       appName:
@@ -83,6 +87,10 @@ on:
         description: 'Container image to use for the job'
         required: false
         default: 'dtzar/helm-kubectl:3.19.1'
+        type: string
+      namespace:
+        description: 'Namespace to delete. Defaults to globalEnv for backward compatibility.'
+        required: false
         type: string
 
 jobs:
@@ -172,4 +180,5 @@ jobs:
           chmod 600 ~/.kube/config
           cd ${{ inputs.helmfileDir }}
           helmfile -e ${{ inputs.globalEnv }} -l app=${{ inputs.appName }} destroy
-          kubectl delete namespace ${{ inputs.appName }} --ignore-not-found
+          NAMESPACE="${{ inputs.namespace != '' && inputs.namespace || inputs.globalEnv }}"
+          kubectl delete namespace "$NAMESPACE" --ignore-not-found
