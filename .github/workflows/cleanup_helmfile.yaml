@@ -111,7 +111,6 @@ jobs:
 
       - name: Add inputs to GITHUB_ENV
         run: |
-          echo "APP_NAMESPACE=${{ inputs.appNamespace }}" >> $GITHUB_ENV
           echo "DOCKER_IMAGE=${{ inputs.dockerImage }}" >> $GITHUB_ENV
 
       - name: Install tools
@@ -173,4 +172,4 @@ jobs:
           chmod 600 ~/.kube/config
           cd ${{ inputs.helmfileDir }}
           helmfile -e ${{ inputs.globalEnv }} -l app=${{ inputs.appName }} destroy
-          kubectl delete namespace ${{ inputs.globalEnv }}
+          kubectl delete namespace ${{ inputs.appName }} --ignore-not-found

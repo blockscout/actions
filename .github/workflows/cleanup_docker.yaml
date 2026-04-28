@@ -8,10 +8,18 @@ on:
         description: 'Docker image to delete'
         required: false
         type: string
+      imageName:
+        description: 'GHCR package name to delete the tag from (defaults to repo name)'
+        required: false
+        type: string
   workflow_call:
     inputs:
       dockerImage:
         description: 'Docker image to delete'
+        required: false
+        type: string
+      imageName:
+        description: 'GHCR package name to delete the tag from (defaults to repo name)'
         required: false
         type: string
 
@@ -47,7 +55,7 @@ jobs:
         with:
           # NOTE: at now only orgs is supported
           owner: ${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}
-          name: ${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}
+          name: ${{ inputs.imageName != '' && inputs.imageName || env.GITHUB_REPOSITORY_NAME_PART_SLUG }}
           # NOTE: using Personal Access Token
           token: ${{ secrets.PAT }}
           tag: ${{ env.DOCKER_IMAGE }}
