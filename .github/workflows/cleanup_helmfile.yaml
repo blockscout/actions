@@ -43,6 +43,10 @@ on:
         required: false
         default: 'dtzar/helm-kubectl:3.19.1'
         type: string
+      namespace:
+        description: 'Namespace to delete. Defaults to globalEnv for backward compatibility.'
+        required: false
+        type: string
   workflow_call:
     inputs:
       appName:
@@ -84,6 +88,10 @@ on:
         required: false
         default: 'dtzar/helm-kubectl:3.19.1'
         type: string
+      namespace:
+        description: 'Namespace to delete. Defaults to globalEnv for backward compatibility.'
+        required: false
+        type: string
 
 jobs:
   cleanup:
@@ -111,7 +119,6 @@ jobs:
 
       - name: Add inputs to GITHUB_ENV
         run: |
-          echo "APP_NAMESPACE=${{ inputs.appNamespace }}" >> $GITHUB_ENV
           echo "DOCKER_IMAGE=${{ inputs.dockerImage }}" >> $GITHUB_ENV
 
       - name: Install tools
@@ -173,4 +180,5 @@ jobs:
           chmod 600 ~/.kube/config
           cd ${{ inputs.helmfileDir }}
           helmfile -e ${{ inputs.globalEnv }} -l app=${{ inputs.appName }} destroy
-          kubectl delete namespace ${{ inputs.globalEnv }}
+          NAMESPACE="${{ inputs.namespace != '' && inputs.namespace || inputs.globalEnv }}"
+          kubectl delete namespace "$NAMESPACE" --ignore-not-found
